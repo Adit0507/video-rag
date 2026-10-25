@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging, re
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Literal
+from typing import Protocol
 from urllib.parse import parse_qs,urlparse
+from rag.models import VideoMetadata, RawTranscript,TranscriptLine
 from rag.core.errors import (
     InvalidURLError,
     TransientError,
@@ -57,4 +58,24 @@ def parse_video_id(url_or_id: str)->str:
 def canonical_url(video_id: str)-> str:
     return f"https://www.youtube.com/watch?v={video_id}"
 
+
+# metadata
+class MetadataFetcher(Protocol):
+    def fetch(self, video_id: str)-> VideoMetadata: ...
+
+def validate_metadata(meta: VideoMetadata,max_duration_s: int)-> None:
+    """Reject videos the pipeline cannot or should not process."""
+    if meta.is_live:
+        raise VideoUnavailableError("Live streams and upcoming premieres are not supported.")
+    if meta.age_limit >= 18:
+        raise VideoUnavailableError("This video is age-restricted.")
+    if meta.availability in ("private", "needs_auth", "subscriber_only", "premium_only"):
+        raise VideoUnavailableError(f"This video is not publicly available ({meta.availability}).")
+    if meta.duration_s <= 0:
+        raise VideoUnavailableError("This video has no duration (it may be a live stream).")
+    if meta.duration_s > max_duration_s:
+        raise VideoUnavailableError(
+            f"Video is {meta.duration_s / 3600:.1f} h long; the limit is "
+            f"{max_duration_s / 3600:.1f} h (MAX_VIDEO_DURATION_S)."
+        )
 
