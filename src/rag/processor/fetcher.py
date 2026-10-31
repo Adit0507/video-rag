@@ -161,3 +161,69 @@ def metadata_from_info(video_id: str,info: dict) ->VideoMetadata:
         age_limit=int(info.get("age_limit") or 0),
         availability=info.get("availability"),
     )
+
+class CaptionFetcher(Protocol):
+    def fetch():
+        """ returns the best caption track or none """
+    ...
+
+class _TrackLike(Protocol):
+    lang_code: str
+    is_generated: bool
+
+def _lang_matches(code:str,wanted: str)-> bool:
+    code, wanted = code.lower(), wanted.lower()
+    return code == wanted or code.split("-")[0] == wanted.split("-")[0]
+
+def choose_transcript(tracks: Iterable[_TrackLike], preferred:list[str])-> _TrackLike| None:
+    tracks =list(tracks)
+    for generated in (False,True):
+        for lang in preferred:
+            for t in tracks:
+                if t.is_generated ==generated and _lang_matches(t.lang_code, lang): 
+                    return t
+   
+    for generated in (False,True):
+        for t in tracks:
+            if t.is_generated== generated:
+                return t
+    return None
+
+class YTCaptionFetcher:
+    def __init__(self,proxy_url: str| None=None)-> None:
+        from youtube_transcript_api import YouTubeTranscriptApi
+        from youtube_transcript_api.proxies import GenericProxyConfig
+
+        proxy= GenericProxyConfig(http_url=proxy_url,https_url=proxy_url) if proxy_url else None
+        self._api= YouTubeTranscriptApi(proxy_config=proxy)
+
+    def fetch(self, video_id: str, preferred_languages: list[str]) -> RawTranscript | None:
+        from youtube_transcript_api import _errors as yte
+
+        try:
+            tracks = self._api.list(video_id)
+            track = choose_transcript(tracks, preferred_languages)
+            if track is None:
+                return None
+            fetched=track.fetch()
+
+        except (yte.TranscriptsDisabled,yte.NoTranscriptFound):
+            return None
+        except (yte.IpBlocked, yte.RequestBlocked, yte.PoTokenRequired) as e:
+            raise YouTubeBlockedError(type(e).__name__) from e
+        except yte.AgeRestricted as e:
+            raise VideoUnavailableError("This video is age-restricted.") from e
+        except (yte.VideoUnavailable, yte.VideoUnplayable, yte.InvalidVideoId) as e:
+            raise VideoUnavailableError("This video is unavailable.") from e
+        except (yte.YouTubeRequestFailed, yte.YouTubeDataUnparsable) as e:
+            raise TransientError(f"YouTube request failed: {type(e).__name__}") from e
+        except OSError as e:
+            raise TransientError(f"Network error while fetching captions: {e}") from e
+
+        lines=[
+            TranscriptLine(start=s.start,end= s.start+ s.duration,text=s.text)
+            for s in fetched.snippets
+        ]
+        source ="captions_auto" if track.is_generated else "captions_manual"
+        log.info("captions for %s: %s, %s, %d lines", video_id, track.language_code, source, len(lines))
+        return RawTranscript(video_id=video_id, language=track.language_code, source=source, lines=lines)
