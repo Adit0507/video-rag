@@ -16,8 +16,9 @@ METADATA="metadata.json"
 SEGMENTS="segments.json"
 SUMMARY="summary.json"
 DOCUMENT="document.json"
+RAW_TRANSCRIPT ="raw_transcript.json"
 
-class ArtifactStore(BaseModel):
+class ArtifactStore:
     def __init__(self, data_dir:Path)->None:
         self.root=Path(data_dir)/ "videos"
 
@@ -47,7 +48,7 @@ class ArtifactStore(BaseModel):
     def load(self, video_id:str, name:str, model: type[M])->M:
         return model.model_validate_json(self.path(video_id, name).read_text(encoding="utf-8"))
     def load_if_exists(self, video_id:str, name:str, model: type[M])->M | None:
-        return self.load(self, video_id,name, model) if self.exists(video_id,name) else None
+        return self.load(video_id,name, model) if self.exists(video_id,name) else None
 
     def delete(self, video_id:str, name: str)-> None:
         self.path(video_id, name).unlink(missing_ok=True)
