@@ -36,7 +36,7 @@ async def _cmd_process(url: str)-> int:
     return 0
 
 def _cmd_show(video_id: str,limit: int)-> int:
-    store =build_artifacts(get_settings)
+    store =build_artifacts(get_settings())
     vid =parse_video_id(video_id)
 
     if not store.exists(vid, A.DOCUMENT):
