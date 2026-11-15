@@ -32,3 +32,6 @@ class YouTubeBlockedError(PermanentError):
 
 class NoTranscriptError(PermanentError):
     pass
+
+class EmbeddingModelMismatchError(PermanentError):
+    """ vector collection was built with diff embedding model than configured """
