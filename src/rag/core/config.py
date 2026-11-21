@@ -18,6 +18,18 @@ class Settings(BaseSettings):
     segment_window_s: float= 45.0
     segment_overlap_s: float= 10.0
     segment_max_chars: int = 2000
+
+    #embeddings
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_query_prefix:str |None= None
+    embedding_document_prefix:str |None= None
+    embedding_batch_size: int =32
+    models_dir: Path =Path("models")
+
+    # vector store
+    chroma_host: str |None =None
+    chroma_port: int = 8000 
+
     log_level: str = "INFO"
 
     @model_validator(mode="after")
